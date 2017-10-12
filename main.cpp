@@ -1,9 +1,18 @@
 #include<bits/stdc++.h>
 
-//#define WRONG_ID "wrong_id"
+#define WRONG_LINE_IN_INPUT_FILE 0
+#define WRONG_FILE 1
+#define WRONG_NUMBER_OF_PARAMETERS 2
+#define WRONG_ID 3
+#define MAX_GROUP_SIZE 3
+#define MIN_GROUP_SIZE 2
 //#define
 using namespace std;
 
+
+void handleError(int errorType, int inLine, string fileName = ""){
+
+}
 
 bool isIdCorrect(string studentId){
     regex idRegex("([a-z]{2}[0-9]{6})|([a-z]{3}-[0-9]{4})");
@@ -16,7 +25,7 @@ list<string> splitString(const string& str, const string& separator){
     return result;
 }
 //poprawne istniejące id, bez powtórzeń
-list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, map<string,vector<string>>& existingGroups ) {
+list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, map<string,vector<string>>& existingGroups) {
     regex prefixRegex("grupa[1-8]/zadanie[1-6]/");
     list<string> result;
 
@@ -38,50 +47,66 @@ list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, m
 }
 
 pair<vector<string>, bool> readStudentsIdsFromFile(string fileName){
+    set<string> existingIds;
     vector<string> input;
     pair<vector<string>,bool> result;
     result.second = true;
     string bufor;
-    ifstream inputFile;
-    inputFile.open(fileName);
+    ifstream inputStream(fileName);
     int lineNumber = 1;
-    if(inputFile.is_open()){
-        while( getline(inputFile,bufor)){
-            if(isIdCorrect(bufor)) {
+
+    if(inputStream.is_open()){
+        getline(inputStream,bufor);
+        while(bufor != ""){
+            if(isIdCorrect(bufor) && existingIds.find(bufor) != existingIds.end()) {
                 result.first.push_back(bufor);
+                existingIds.insert(bufor);
             } else {
-                //todo obsługa błędu
+                handleError(WRONG_LINE_IN_INPUT_FILE,lineNumber,fileName);
             }
             lineNumber++;
             bufor.clear();
+            getline(inputStream,bufor);
         }
     } else {
-        cout << "jakiś błąd";
+        handleError(WRONG_FILE,0,fileName);
         result.second = false;
     }
     return result;
 }
 
-pair<string,bool> readLineFromInput(){
+list<list<string>> readGroupDescriptionsFromStdin(map<string,vector<string>>& existingGroups){
+    list<list<string>> result;
+    string bufor;
+    list<string> groupDescription;
+    int lineNumber = 1;
 
+    getline(cin,bufor);
+    while(bufor != ""){
+        groupDescription = ExtractStudentsFromGroup(bufor,lineNumber,existingGroups);
+        if(groupDescription.size() >= MIN_GROUP_SIZE && groupDescription.size() <= MAX_GROUP_SIZE){
+            result.push_back(groupDescription);
+        }
+        lineNumber++;
+        bufor.clear();
+        getline(cin,bufor);
+    }
+
+    return result;
 }
 
 int main(int argc,  char** argv ) {
-    cout <<"hello\nargc:"<<argc<<"\n\n";
+    map<string,vector<string>> existingGroups;
+
     if(argc != 2){
-        //todo obsługa błędu
+        handleError(WRONG_NUMBER_OF_PARAMETERS,0);
+        return 1;
     } else {
-        pair<vector<string>,bool> input = readStudentsIdsFromFile(argv[0]);
-        if(input.second == false){
-            //todo bląd
-            cout<< "pliku brakuje\n";
+        pair<vector<string>,bool> studentsIds = readStudentsIdsFromFile(argv[1]);
+        if(studentsIds.second == false){
             return 1;
         } else {
-            for(int i=0;i<input.first.size();i++){
-                cout << input.first[i];
-            }
-
-            //todo cały program
+            list<list<string>> groups = readGroupDescriptionsFromStdin(existingGroups);
         }
     }
 
