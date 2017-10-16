@@ -11,6 +11,8 @@
 
 using namespace std;
 
+typedef unordered_map<string, vector<string> > str_to_vstr_map;
+
 void handleError(int errorType, int lineNumber, string message = "MISSING_ERROR_PARAMETER", string message2 = "MISSING_ERROR_PARAMETER2"){
 //    ostream errorOutput = cout;
     if(errorType == WRONG_LINE_IN_INPUT_FILE)
@@ -25,7 +27,7 @@ void handleError(int errorType, int lineNumber, string message = "MISSING_ERROR_
         cout << "Error in cin, line " << lineNumber << ": " + message + "\n";
     else
         cout << "Unknown error happened in line " << lineNumber << " error id: "
-                    << errorType << " error massages: " + message + " " +message2 + "\n";
+             << errorType << " error massages: " + message + " " +message2 + "\n";
 }
 
 bool isIdCorrect(string studentId){
@@ -33,8 +35,8 @@ bool isIdCorrect(string studentId){
     return regex_match(studentId,idRegex);
 }
 
-list<string> splitString(string& str, int lineNumber){
-    list<string> result;
+vector<string> splitString(string& str, int lineNumber){
+    vector<string> result;
     while(str.length() >= 8){
         result.push_back(str.substr(0,8));
         if(str[8] != '+' && str.length() > 8)
@@ -48,14 +50,14 @@ list<string> splitString(string& str, int lineNumber){
     return result;
 }
 //to jest trochę za długie chyba
-list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, map<string,vector<string>>& existingGroups) {
+vector<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, str_to_vstr_map& idToPartnersMap) {
     regex prefixRegex("grupa[1-8]/zadanie[1-6]/");
-    list<string> result;
+    vector<string> result;
     string groupDescriptionCopy = groupDescription;
     set<string> idsInGroup;
-    list<list<string>::iterator> stringToDelete;
+    vector<vector<string>::iterator> stringToDelete;
     if(regex_search(groupDescription,prefixRegex)){
-         groupDescription = regex_replace(groupDescription,prefixRegex,"");
+        groupDescription = regex_replace(groupDescription,prefixRegex,"");
     } else {
         handleError(WRONG_GROUP_DESCRIPTION,lineNumber,groupDescriptionCopy);
         result.clear();
@@ -72,7 +74,7 @@ list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, m
         return result;
     }
 
-    for (list<string>::iterator it = result.begin(); it != result.end(); it++) {
+    for (vector<string>::iterator it = result.begin(); it != result.end(); it++) {
         if (isIdCorrect(*it) == false) {
             handleError(WRONG_GROUP_DESCRIPTION,lineNumber,groupDescriptionCopy);
             result.clear();
@@ -80,8 +82,8 @@ list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, m
         }
     }
 
-    for (list<string>::iterator it = result.begin(); it != result.end(); it++){
-        if(existingGroups.find(*it) == existingGroups.end()){
+    for (vector<string>::iterator it = result.begin(); it != result.end(); it++){
+        if(idToPartnersMap.find(*it) == idToPartnersMap.end()){
             handleError(WRONG_ID,lineNumber,*it);
             stringToDelete.push_back(it);
         }
@@ -95,14 +97,14 @@ list<string> ExtractStudentsFromGroup(string groupDescription, int lineNumber, m
         }
     }
 
-    for(list<list<string>::iterator>::iterator it  = stringToDelete.begin(); it != stringToDelete.end(); it++){
+    for(vector<vector<string>::iterator>::iterator it  = stringToDelete.begin(); it != stringToDelete.end(); it++){
         result.erase(*it);
     }
 
     return result;
 }
 
-pair<vector<string>, bool> readStudentsIdsFromFile(string fileName, map<string,vector<string>>& existingGroups){
+pair<vector<string>, bool> readStudentsIdsFromFile(string fileName, str_to_vstr_map& idToPartnersMap){
     vector<string> input;
     pair<vector<string>,bool> result;
     result.second = true;
@@ -113,14 +115,14 @@ pair<vector<string>, bool> readStudentsIdsFromFile(string fileName, map<string,v
     if(inputStream.is_open()){
         getline(cin,bufor);
         while(bufor != ""){
-            if(isIdCorrect(bufor) && existingGroups.find(bufor) == existingGroups.end()) {
+            if(isIdCorrect(bufor) && idToPartnersMap.find(bufor) == idToPartnersMap.end()) {
                 result.first.push_back(bufor);
-                pair<string,vector<string>> help;
+                pair< string,vector<string> > help;
                 help.first = bufor;
                 vector<string> emptyVector;
                 emptyVector.clear();
                 help.second = emptyVector;
-                existingGroups.insert(help);
+                idToPartnersMap.insert(help);
             } else {
                 handleError(WRONG_LINE_IN_INPUT_FILE,lineNumber,fileName,bufor);
             }
@@ -136,15 +138,15 @@ pair<vector<string>, bool> readStudentsIdsFromFile(string fileName, map<string,v
     return result;
 }
 
-list<list<string>> readGroupDescriptionsFromStdin(map<string,vector<string>>& existingGroups){
-    list<list<string>> result;
+vector< vector<string> > readGroupDescriptionsFromStdin(str_to_vstr_map& idToPartnersMap){
+    vector< vector<string> > result;
     string bufor;
-    list<string> groupDescription;
+    vector<string> groupDescription;
     int lineNumber = 1;
 
     getline(cin,bufor);
     while(bufor != ""){
-        groupDescription = ExtractStudentsFromGroup(bufor,lineNumber,existingGroups);
+        groupDescription = ExtractStudentsFromGroup(bufor,lineNumber,idToPartnersMap);
         if(groupDescription.size() >= MIN_GROUP_SIZE && groupDescription.size() <= MAX_GROUP_SIZE){
             result.push_back(groupDescription);
         }
@@ -156,20 +158,61 @@ list<list<string>> readGroupDescriptionsFromStdin(map<string,vector<string>>& ex
     return result;
 }
 
-int main(int argc,  char** argv ) {
-    map<string,vector<string>> existingGroups;
-
-    if(argc != 2){
-        handleError(WRONG_NUMBER_OF_PARAMETERS,0);
-        return 1;
-    } else {
-        pair<vector<string>,bool> studentsIds = readStudentsIdsFromFile(argv[1],existingGroups);
-        if(studentsIds.second == false){
-            return 1;
-        } else {
-            list<list<string>> groups = readGroupDescriptionsFromStdin(existingGroups);
+void assignPartners(str_to_vstr_map& idToPartnersMap, const vector< vector<string> >& groups) {
+    for (auto const & group : groups) {
+        vector<string>::const_iterator it = group.begin();
+        while (it != group.end()) {
+            vector<string>& partners = idToPartnersMap[*it];
+            partners.insert(partners.end(), group.begin(), it);
+            partners.insert(partners.end(), ++it, group.end());
         }
     }
+}
 
+int countPenaltyPoints2(const vector<string>& partnersIds) {
+    unordered_map<string, int> duplicatesCounter;
+    int penaltyPoints = 0;
+    for (auto const & id : partnersIds) {
+        penaltyPoints += ++duplicatesCounter[id] - 1;
+    }
+    return penaltyPoints;
+}
+
+int countPenaltyPoints(vector<string>& partnersIds) {
+    int penaltyPoints = 0;
+    sort(partnersIds.begin(), partnersIds.end());
+    vector<string>::iterator firstOccurIt = partnersIds.begin();
+    vector<string>::iterator lastOccurIt;
+    do {
+        lastOccurIt = upper_bound(firstOccurIt, partnersIds.end(), *firstOccurIt);
+        int n = lastOccurIt - firstOccurIt;
+        penaltyPoints += n * (n - 1) / 2;
+        firstOccurIt = lastOccurIt;
+    } while (firstOccurIt != partnersIds.end());
+    return penaltyPoints;
+}
+
+string getStudentsIndex(const string& id) {
+    return string(id.end() - 6, id.end());
+}
+
+int main(int argc,  char** argv) {
+    str_to_vstr_map idToPartnersMap;
+
+    if (argc != 2) {
+        handleError(WRONG_NUMBER_OF_PARAMETERS, 0);
+        return 1;
+    } else {
+        pair<vector<string>, bool> studentsIds = readStudentsIdsFromFile(argv[1], idToPartnersMap);
+        if (studentsIds.second == false) {
+            return 1;
+        } else {
+            vector<vector<string> > groups = readGroupDescriptionsFromStdin(idToPartnersMap);
+            assignPartners(idToPartnersMap, groups);
+            for (auto &kv : idToPartnersMap) {
+                cout << getStudentsIndex(kv.first) << ' ' << countPenaltyPoints(kv.second) << '\n';
+            }
+        }
+    }
     return 0;
 }
